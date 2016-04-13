@@ -1,22 +1,23 @@
-import random
 import os
 import time
 import numpy as np
 from scipy import misc
-import theano
-import theano.tensor as T
 import lasagne
+import theano
+import cPickle as pickle
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
+from lasagne.init import GlorotUniform
 from nolearn.lasagne import NeuralNet
 from sklearn.utils import shuffle
+from sklearn.metrics import classification_report, accuracy_score
 
 num_train = 0
-num_classes = 256
+num_classes = 4
 num_test = 0
-img_dim = 32
-num_epochs = 300
-learning_rate = 0.00008
+img_dim = 50
+num_epochs = 20
+learning_rate = 0.002
 momentum = 0.9
 
 def load_data(fold):
@@ -64,6 +65,21 @@ def process_data():
 
   return X_train, Y_train, X_test, Y_test
 
+def read_model_data(model, filename):
+    filename = os.path.join('./', '%s.%s' % (filename, 'params'))
+    with open(filename, 'r') as f:
+        data = pickle.load(f)
+    lasagne.layers.set_all_param_values(model, data)
+
+
+def write_model_data(model, filename):
+    """Pickels the parameters within a Lasagne model."""
+    data = lasagne.layers.get_all_param_values(model)
+    filename = os.path.join('./', filename)
+    filename = '%s.%s' % (filename, 'params')
+    with open(filename, 'w') as f:
+        pickle.dump(data, f)
+
 X_train ,Y_train , X_test , Y_test = process_data()
 
 dataset = dict(
@@ -78,31 +94,46 @@ dataset = dict(
 )
 
 convNet = NeuralNet(
-  # layer construction
+  # ----------------------- layer construction ---------------------------------------
   layers = [
     ('input',layers.InputLayer),
     ('conv1',layers.Conv2DLayer),
     ('pool1',layers.MaxPool2DLayer),
     ('conv2',layers.Conv2DLayer),
     ('pool2',layers.MaxPool2DLayer),
+    ('conv3',layers.Conv2DLayer),
+    ('pool3',layers.MaxPool2DLayer),
     ('hidden1',layers.DenseLayer),
     # ('hidden2',layers.DenseLayer),
     ('dropout',layers.DropoutLayer),
     ('output',layers.DenseLayer),
   ],
 
-  # layer parameters
+  # ----------------------- layer parameters -----------------------------------------
   input_shape = (None, 1, img_dim, img_dim),
-  conv1_num_filters=32, conv1_filter_size=(5, 5), conv1_nonlinearity=lasagne.nonlinearities.rectify,
+
+  conv1_num_filters=32, conv1_filter_size=(3, 3), conv1_nonlinearity=lasagne.nonlinearities.rectify,
+  conv1_W = GlorotUniform('relu'),
   pool1_pool_size=(2, 2),
-  conv2_num_filters=64, conv2_filter_size=(5, 5), conv2_nonlinearity=lasagne.nonlinearities.rectify,
+
+  conv2_num_filters=64, conv2_filter_size=(3, 3), conv2_nonlinearity=lasagne.nonlinearities.rectify,
+  conv2_W = GlorotUniform('relu'),
   pool2_pool_size=(2, 2),
+
+  conv3_num_filters=128, conv3_filter_size=(5, 5), conv3_nonlinearity=lasagne.nonlinearities.rectify,
+  conv3_W = GlorotUniform('relu'),
+  pool3_pool_size=(2, 2),
+
   hidden1_num_units=256, hidden1_nonlinearity=lasagne.nonlinearities.rectify,
+  hidden1_W = GlorotUniform('relu'),
+
   # hidden2_num_units=256, hidden2_nonlinearity=lasagne.nonlinearities.rectify,
+
   dropout_p=0.5,
   output_num_units=num_classes, output_nonlinearity=lasagne.nonlinearities.softmax,
+  output_W = GlorotUniform(gain = 1.0),
 
-  # ConvNet Params
+  # ----------------------- ConvNet Params -------------------------------------------
   update = nesterov_momentum,
   update_learning_rate = learning_rate,
   update_momentum = momentum,
@@ -112,14 +143,16 @@ convNet = NeuralNet(
 )
 
 tic = time.time()
-convNet.fit(dataset['X_train'], dataset['Y_train'])
+for i in range(12):
+  convNet.fit(dataset['X_train'], dataset['Y_train'])
+  fl = 'saved_model_data' + str(i+1) + '.npz'
+  convNet.save_weights_to(fl)
+  print 'Model saved to file :- ', fl
 toc = time.time()
+
 y_pred = convNet.predict(dataset['X_test'])
+print classification_report(Y_test, y_pred)
+print accuracy_score(Y_test, y_pred)
+print 'Time taken to train the data :- ', toc-tic, 'seconds'
 
-print y_pred
-
-num_correct = np.sum(Y_test==y_pred)
-accuracy = float(num_correct)/num_test
-print 'Accuracy is :- ', accuracy
-print 'Time taken to train the data :- ', toc-tic
 
