@@ -13,11 +13,11 @@ from sklearn.utils import shuffle
 from sklearn.metrics import classification_report, accuracy_score
 
 num_train = 0
-num_classes = 4
+num_classes = 256
 num_test = 0
 img_dim = 50
 num_epochs = 20
-learning_rate = 0.002
+learning_rate = 0.001
 momentum = 0.9
 
 def load_data(fold):
@@ -145,11 +145,13 @@ convNet = NeuralNet(
 tic = time.time()
 for i in range(12):
   convNet.fit(dataset['X_train'], dataset['Y_train'])
-  fl = 'saved_model_data' + str(i+1) + '.npz'
+  fl = './model1/saved_model_data' + str(i+1) + '.npz'
   convNet.save_weights_to(fl)
   print 'Model saved to file :- ', fl
 toc = time.time()
 
+fl = './model1/saved_model_data' + str(6) + '.npz'
+convNet.load_weights_from(fl)
 y_pred = convNet.predict(dataset['X_test'])
 print classification_report(Y_test, y_pred)
 print accuracy_score(Y_test, y_pred)
